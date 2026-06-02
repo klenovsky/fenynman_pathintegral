@@ -142,6 +142,7 @@ DEFAULTS = {
         "slit_T": 2.0,
         "slit_m": 1.0,
         "slit_scan_span": 1.5,
+        "slit_nhits": 400,
     },
     "imag": {
         "imag_model": "Free particle",
@@ -173,6 +174,9 @@ ensure_defaults("free")
 ensure_defaults("ho")
 ensure_defaults("slit")
 ensure_defaults("imag")
+
+if "slit_nhits" not in st.session_state:
+    st.session_state.slit_nhits = 400
 
 
 # -------------------------------------------------
@@ -614,6 +618,78 @@ def build_real_imag_animation_gif_cached(
     out = BytesIO()
     images[0].save(out, format='GIF', save_all=True, append_images=images[1:], duration=int(duration_ms), loop=0, disposal=2)
     return out.getvalue()
+
+
+
+
+def sample_detector_hits(screen_y: np.ndarray, screen_intensity: np.ndarray, n_hits: int, seed: int) -> np.ndarray:
+    prob = np.clip(np.asarray(screen_intensity, dtype=float), 0.0, None)
+    prob = prob / prob.sum()
+    rng = np.random.default_rng(seed)
+    idx = rng.choice(len(screen_y), size=n_hits, replace=True, p=prob)
+    return np.asarray(screen_y)[idx]
+
+
+def make_detector_hits_figure(screen_y: np.ndarray, screen_intensity: np.ndarray, hits: np.ndarray, title: str) -> go.Figure:
+    hist_counts, edges = np.histogram(hits, bins=40, range=(float(screen_y.min()), float(screen_y.max())))
+    centers = 0.5 * (edges[:-1] + edges[1:])
+    hist_norm = hist_counts / max(1, hist_counts.max())
+    model_norm = screen_intensity / max(1e-12, float(np.max(screen_intensity)))
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=screen_y, y=model_norm, mode='lines', line=dict(width=3), name=tr('Model intensity', 'Modelová intenzita')))
+    fig.add_trace(go.Bar(x=centers, y=hist_norm, opacity=0.45, name=tr('Accumulated photon hits', 'Nasbírané dopady fotonů')))
+    fig.update_layout(
+        title=title,
+        xaxis_title=tr('Detector position on screen', 'Poloha detektoru na stínítku'),
+        yaxis_title=tr('Normalized counts / intensity', 'Normalizované počty / intenzita'),
+        height=410,
+        margin=dict(l=20, r=20, t=48, b=20),
+        barmode='overlay',
+    )
+    return fig
+
+
+def make_detector_hits_animation(screen_y: np.ndarray, screen_intensity: np.ndarray, hits: np.ndarray, title: str) -> go.Figure:
+    bins = np.linspace(float(screen_y.min()), float(screen_y.max()), 41)
+    centers = 0.5 * (bins[:-1] + bins[1:])
+    final_counts, _ = np.histogram(hits, bins=bins)
+    final_norm = final_counts / max(1, final_counts.max())
+    model_norm = screen_intensity / max(1e-12, float(np.max(screen_intensity)))
+    n = len(hits)
+    frame_idx = np.unique(np.linspace(1, n, min(60, n), dtype=int))
+    frames = []
+    for k in frame_idx:
+        counts, _ = np.histogram(hits[:k], bins=bins)
+        counts_norm = counts / max(1, counts.max())
+        frames.append(go.Frame(
+            name=str(k),
+            data=[
+                go.Scatter(x=screen_y, y=model_norm, mode='lines', line=dict(width=3), opacity=0.22, name=tr('Final intensity', 'Konečná intenzita')),
+                go.Bar(x=centers, y=counts_norm, opacity=0.70, name=tr('Accumulated hits', 'Nasbírané dopady')),
+            ],
+            layout=go.Layout(title=f"{title}<br>{tr('Registered photons', 'Registrované fotony')}: {k}/{n}")
+        ))
+    fig = go.Figure(
+        data=[
+            go.Scatter(x=screen_y, y=model_norm, mode='lines', line=dict(width=3), opacity=0.22, name=tr('Final intensity', 'Konečná intenzita')),
+            go.Bar(x=centers, y=np.zeros_like(centers), opacity=0.70, name=tr('Accumulated hits', 'Nasbírané dopady')),
+        ],
+        frames=frames,
+    )
+    fig.update_layout(
+        title=title,
+        xaxis_title=tr('Detector position on screen', 'Poloha detektoru na stínítku'),
+        yaxis_title=tr('Normalized counts / intensity', 'Normalizované počty / intenzita'),
+        height=430,
+        margin=dict(l=20, r=20, t=72, b=20),
+        barmode='overlay',
+        updatemenus=[dict(type='buttons', direction='left', x=0.0, y=1.16, buttons=[
+            dict(label=tr('Play', 'Play'), method='animate', args=[None, {'frame': {'duration': 140, 'redraw': True}, 'fromcurrent': True, 'transition': {'duration': 0}}]),
+            dict(label=tr('Pause', 'Pauza'), method='animate', args=[[None], {'frame': {'duration': 0, 'redraw': False}, 'mode': 'immediate', 'transition': {'duration': 0}}]),
+        ])],
+        sliders=[dict(active=0, steps=[dict(method='animate', args=[[f.name], {'frame': {'duration': 0, 'redraw': True}, 'mode': 'immediate', 'transition': {'duration': 0}}], label=f.name) for f in frames], x=0.08, len=0.88, y=-0.08)],
+    )
+    return fig
 
 
 def render_animation_with_gif(fig: go.Figure, key_prefix: str, filename: str, gif_kind: str | None = None, gif_payload: dict | None = None) -> None:
@@ -1571,9 +1647,11 @@ elif section == tr("Double slit: two path families", "Dvojštěrbina: dvě rodin
 - Set the detector position on the screen and the slit separation.
 - The first plot is a geometric sketch with the source, barrier, two slits, and the chosen detector point.
 - The second plot scans detector positions and shows a normalized interference pattern from two reference families.
+- The next plot samples individual photon detections on the screen; many localized hits gradually build up the interference pattern.
 - The path plot shows sampled upper and lower bundles that pass through the two slit regions.
 - The complex-plane plot shows upper-family and lower-family mean amplitudes and their sum.
-- The Play animation adds sampled paths one by one and updates the cumulative sum.
+- One Play animation adds sampled paths one by one and updates the cumulative sum.
+- The second Play animation accumulates photon hits on the screen in front of you.
                 """,
                 """
 - Nastav polohu detektoru na stínítku a vzdálenost štěrbin.
@@ -1692,6 +1770,26 @@ elif section == tr("Double slit: two path families", "Dvojštěrbina: dvě rodin
     col1, col2 = st.columns(2)
     col1.plotly_chart(fig_scheme, use_container_width=True)
     col2.plotly_chart(fig_screen, use_container_width=True)
+
+    hit_cols = st.columns([1, 1, 1])
+    hit_cols[0].slider(tr("Photon detections on screen", "Počet detekovaných fotonů na stínítku"), 20, 2000, 400, step=20, key="slit_nhits")
+    if "slit_nhits" not in st.session_state:
+        st.session_state.slit_nhits = 400
+    hits = sample_detector_hits(data["screen_y"], data["screen_intensity"], st.session_state.slit_nhits, st.session_state.seed + 101)
+    fig_hits = make_detector_hits_figure(
+        data["screen_y"],
+        data["screen_intensity"],
+        hits,
+        tr("Photon hits on the screen build up the interference pattern", "Dopady fotonů na stínítko postupně vytvářejí interferenční obraz"),
+    )
+    st.plotly_chart(fig_hits, use_container_width=True)
+    hit_anim = make_detector_hits_animation(
+        data["screen_y"],
+        data["screen_intensity"],
+        hits,
+        tr("Play: accumulation of individual photon hits on the screen", "Play: skládání jednotlivých dopadů fotonů na stínítku"),
+    )
+    st.plotly_chart(hit_anim, use_container_width=True)
 
     fig_paths = go.Figure()
     idx_u = choose_path_indices(data["upper_paths"].shape[0], st.session_state.show_paths)
