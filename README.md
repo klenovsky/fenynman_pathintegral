@@ -30,3 +30,8 @@ streamlit run app.py
 ## Notes
 
 This is a didactic visualization tool, not a rigorous continuum path-integral solver. The app samples large ensembles of smooth trial paths, evaluates discrete actions in a vectorized way, and visualizes how complex amplitudes interfere.
+
+
+## GIF export
+
+Animated panels can be exported directly from the app as GIF files. The export uses Plotly frame rendering via `kaleido` and assembles the result into a GIF with `Pillow`.

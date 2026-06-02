@@ -1,9 +1,12 @@
 import math
+from io import BytesIO
 from typing import Callable, Dict, Iterable, Tuple
 
 import numpy as np
 import plotly.graph_objects as go
+import plotly.io as pio
 import streamlit as st
+from PIL import Image
 from plotly.subplots import make_subplots
 from scipy.interpolate import CubicSpline
 
@@ -462,6 +465,98 @@ def trajectory_density(t: np.ndarray, paths: np.ndarray, bins_t: int = 90, bins_
 def choose_path_indices(total_paths: int, wanted: int) -> np.ndarray:
     wanted = min(wanted, total_paths)
     return np.linspace(0, total_paths - 1, wanted, dtype=int)
+
+
+@st.cache_data(show_spinner=False)
+def build_animation_gif_cached(fig_json: str, duration_ms: int = 140, max_frames: int = 48, scale: float = 1.2) -> bytes:
+    fig = go.Figure(pio.from_json(fig_json))
+    if not fig.frames:
+        raise ValueError("This figure does not contain animation frames.")
+
+    n_frames = len(fig.frames)
+    if n_frames <= max_frames:
+        chosen = np.arange(n_frames, dtype=int)
+    else:
+        chosen = np.linspace(0, n_frames - 1, max_frames, dtype=int)
+
+    images = []
+    base = go.Figure(fig)
+    for idx in chosen:
+        frame = fig.frames[int(idx)]
+        frame_fig = go.Figure(base)
+        for j, trace in enumerate(frame.data):
+            frame_fig.data[j].update(trace)
+        if frame.layout:
+            frame_fig.update_layout(frame.layout)
+        png = pio.to_image(frame_fig, format="png", engine="kaleido", scale=scale)
+        images.append(Image.open(BytesIO(png)).convert("RGBA"))
+
+    out = BytesIO()
+    images[0].save(
+        out,
+        format="GIF",
+        save_all=True,
+        append_images=images[1:],
+        duration=int(duration_ms),
+        loop=0,
+        disposal=2,
+    )
+    return out.getvalue()
+
+
+def render_animation_with_gif(fig: go.Figure, key_prefix: str, filename: str) -> None:
+    st.plotly_chart(fig, use_container_width=True)
+    with st.expander(tr("Save this animation as GIF", "Uložit tuto animaci jako GIF"), expanded=False):
+        c1, c2, c3 = st.columns([1.2, 1.2, 1.8])
+        with c1:
+            duration_ms = st.slider(
+                tr("Frame duration [ms]", "Délka snímku [ms]"),
+                min_value=60,
+                max_value=400,
+                value=140,
+                step=10,
+                key=f"{key_prefix}_gif_duration",
+            )
+        with c2:
+            max_frames = st.slider(
+                tr("Maximum frames", "Maximální počet snímků"),
+                min_value=12,
+                max_value=80,
+                value=min(48, len(fig.frames) if fig.frames else 12),
+                step=4,
+                key=f"{key_prefix}_gif_maxframes",
+            )
+        with c3:
+            st.markdown(
+                tr(
+                    "Generate the GIF only when needed. Fewer frames give smaller files; longer frame duration slows the playback.",
+                    "GIF se generuje až na vyžádání. Méně snímků znamená menší soubor; delší délka snímku zpomalí přehrávání.",
+                )
+            )
+
+        prepare = st.button(tr("Prepare GIF", "Připravit GIF"), key=f"{key_prefix}_prepare_gif")
+        if prepare:
+            try:
+                with st.spinner(tr("Generating GIF...", "Generuji GIF...")):
+                    gif_bytes = build_animation_gif_cached(fig.to_json(), duration_ms=duration_ms, max_frames=max_frames)
+                st.session_state[f"{key_prefix}_gif_bytes"] = gif_bytes
+            except Exception as exc:
+                st.error(
+                    tr(
+                        f"GIF export failed: {exc}. Install/keep the package 'kaleido' available in the deployment.",
+                        f"Export GIF selhal: {exc}. V nasazení musí být dostupný balík 'kaleido'.",
+                    )
+                )
+
+        gif_bytes = st.session_state.get(f"{key_prefix}_gif_bytes")
+        if gif_bytes is not None:
+            st.download_button(
+                tr("Download GIF", "Stáhnout GIF"),
+                data=gif_bytes,
+                file_name=filename,
+                mime="image/gif",
+                key=f"{key_prefix}_download_gif",
+            )
 
 
 def make_trajectory_figure(
@@ -1180,18 +1275,16 @@ if section == tr("Free particle", "Volná částice"):
 
     anim_indices = phase_info["sort_idx"][: min(st.session_state.anim_paths, len(phase_info["sort_idx"]))]
     anim_amps = phase_info["ordered_amps"][: len(anim_indices)]
-    st.plotly_chart(
-        make_addition_animation(
-            data["t"],
-            data["paths"],
-            data["x_ref"],
-            anim_indices,
-            anim_amps,
-            tr("Play: path-by-path accumulation for the free particle", "Play: skládání drah po jedné pro volnou částici"),
-            tr("Position x(t)", "Poloha x(t)"),
-        ),
-        use_container_width=True,
+    free_anim_fig = make_addition_animation(
+        data["t"],
+        data["paths"],
+        data["x_ref"],
+        anim_indices,
+        anim_amps,
+        tr("Play: path-by-path accumulation for the free particle", "Play: skládání drah po jedné pro volnou částici"),
+        tr("Position x(t)", "Poloha x(t)"),
     )
+    render_animation_with_gif(free_anim_fig, "free_anim", "free_particle_paths.gif")
 
     caption(
         "The classical path is not the only allowed path. It is the path around which nearby phases vary slowly enough to add more coherently.",
@@ -1298,18 +1391,16 @@ elif section == tr("Harmonic oscillator", "Harmonický oscilátor"):
 
     anim_indices = phase_info["sort_idx"][: min(st.session_state.anim_paths, len(phase_info["sort_idx"]))]
     anim_amps = phase_info["ordered_amps"][: len(anim_indices)]
-    st.plotly_chart(
-        make_addition_animation(
-            data["t"],
-            data["paths"],
-            data["x_ref"],
-            anim_indices,
-            anim_amps,
-            tr("Play: path-by-path accumulation for the oscillator", "Play: skládání drah po jedné pro oscilátor"),
-            tr("Position x(t)", "Poloha x(t)"),
-        ),
-        use_container_width=True,
+    ho_anim_fig = make_addition_animation(
+        data["t"],
+        data["paths"],
+        data["x_ref"],
+        anim_indices,
+        anim_amps,
+        tr("Play: path-by-path accumulation for the oscillator", "Play: skládání drah po jedné pro oscilátor"),
+        tr("Position x(t)", "Poloha x(t)"),
     )
+    render_animation_with_gif(ho_anim_fig, "ho_anim", "harmonic_oscillator_paths.gif")
 
     caption(
         "The potential does not remove alternative paths. It changes which neighborhood of paths keeps phase coherence best.",
@@ -1501,18 +1592,16 @@ elif section == tr("Double slit: two path families", "Dvojštěrbina: dvě rodin
     col3.plotly_chart(fig_paths, use_container_width=True)
     col4.plotly_chart(fig_ph, use_container_width=True)
 
-    st.plotly_chart(
-        make_addition_animation(
-            x_prog,
-            anim_paths,
-            0.5 * (data["upper_ref"] + data["lower_ref"]),
-            ordered_indices,
-            ordered_amps,
-            tr("Play: path-by-path accumulation for the double slit", "Play: skládání drah po jedné pro dvojštěrbinu"),
-            tr("Transverse coordinate", "Příčná souřadnice"),
-        ),
-        use_container_width=True,
+    slit_anim_fig = make_addition_animation(
+        x_prog,
+        anim_paths,
+        0.5 * (data["upper_ref"] + data["lower_ref"]),
+        ordered_indices,
+        ordered_amps,
+        tr("Play: path-by-path accumulation for the double slit", "Play: skládání drah po jedné pro dvojštěrbinu"),
+        tr("Transverse coordinate", "Příčná souřadnice"),
     )
+    render_animation_with_gif(slit_anim_fig, "slit_anim", "double_slit_paths.gif")
 
     caption(
         "This is a visual model, not a full wave-optics slit solver. Its purpose is to make the amplitude logic visible: two broad families of paths contribute separate complex numbers that interfere on the screen.",
@@ -1669,19 +1758,17 @@ else:
     imag_ordered_weights = weights[phase_info["sort_idx"]][: min(st.session_state.anim_paths, len(phase_info["sort_idx"]))]
     anim_indices = phase_info["sort_idx"][: min(st.session_state.anim_paths, len(phase_info["sort_idx"]))]
     anim_amps = phase_info["ordered_amps"][: len(anim_indices)]
-    st.plotly_chart(
-        make_real_imag_addition_animation(
-            data["t"],
-            data["paths"],
-            data["x_ref"],
-            anim_indices,
-            anim_amps,
-            imag_ordered_weights,
-            tr("Play: building the sum in real and imaginary time", "Play: budování součtu v reálném a imaginárním čase"),
-            tr("Position x(t)", "Poloha x(t)"),
-        ),
-        use_container_width=True,
+    imag_anim_fig = make_real_imag_addition_animation(
+        data["t"],
+        data["paths"],
+        data["x_ref"],
+        anim_indices,
+        anim_amps,
+        imag_ordered_weights,
+        tr("Play: building the sum in real and imaginary time", "Play: budování součtu v reálném a imaginárním čase"),
+        tr("Position x(t)", "Poloha x(t)"),
     )
+    render_animation_with_gif(imag_anim_fig, "imag_anim", "real_vs_imag_time_paths.gif")
 
     caption(
         "In real time, every sampled path has unit modulus and differs only by phase, which makes cancellation severe. In imaginary time, large-action paths are exponentially suppressed.",
