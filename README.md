@@ -1,44 +1,32 @@
-# Feynman Path Integral Visualizer
+# Feynman Path Integral Explorer
 
-A Streamlit teaching app for visualizing Feynman's path-integral viewpoint with vectorized `numpy` and `scipy` calculations.
+A bilingual Streamlit teaching app for visualizing Feynman's path-integral picture of quantum mechanics.
 
-## Panels
+## Main features
 
-1. **Free particle**
-   - sampled paths between fixed endpoints
-   - action distribution
-   - complex phase interference
+- English / Czech interface
+- Free-particle panel
+- Harmonic-oscillator panel
+- Double-slit-inspired two-family interference panel
+- Real-time vs imaginary-time comparison
+- Reset buttons per section
+- Plotly Play animations showing how individual path contributions build a cumulative complex amplitude
+- Vectorized `numpy` / `scipy` implementation suitable for Streamlit Community Cloud
 
-2. **Harmonic oscillator**
-   - endpoint-conditioned classical path
-   - sampled paths in a confining potential
-   - interference around the stationary path
-
-3. **Two path families**
-   - double-slit-style intuition
-   - two bundles of paths contributing separate complex amplitudes
-
-4. **Real time vs imaginary time**
-   - oscillatory real-time factors `exp(iS/ħ)`
-   - exponentially damped Euclidean weights `exp(-S_E/ħ)`
-
-## Numerical approach
-
-The app is intentionally didactic rather than mathematically exact in the continuum sense.
-
-- time is discretized on a fixed grid,
-- candidate paths are generated in batches around reference paths,
-- `scipy.interpolate.CubicSpline` is used in vectorized form,
-- actions are evaluated on whole path ensembles with `numpy`,
-- no Python loops are used over the full path batch during action evaluation.
-
-## Run locally
+## Local run
 
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-## Deploy
+## Deployment
 
-Upload this folder to GitHub and deploy `app.py` on Streamlit Community Cloud.
+1. Upload this folder to a GitHub repository.
+2. Create a new app in Streamlit Community Cloud.
+3. Choose `app.py` as the main file.
+4. Deploy.
+
+## Notes
+
+This is a didactic visualization tool, not a rigorous continuum path-integral solver. The app samples large ensembles of smooth trial paths, evaluates discrete actions in a vectorized way, and visualizes how complex amplitudes interfere.
