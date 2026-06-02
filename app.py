@@ -737,6 +737,11 @@ def render_animation_with_gif(fig: go.Figure, key_prefix: str, filename: str, gi
                             gif_payload["ordered_amps"], gif_payload["ordered_weights"], gif_payload["yaxis_title"],
                             duration_ms=duration_ms, max_frames=max_frames,
                         )
+                    elif gif_kind == "hits" and gif_payload is not None:
+                        gif_bytes = build_detector_hits_animation_gif_cached(
+                            gif_payload["screen_y"], gif_payload["screen_intensity"], gif_payload["hits"],
+                            duration_ms=duration_ms, max_frames=max_frames,
+                        )
                     else:
                         raise ValueError("GIF export is not configured for this animation.")
                 st.session_state[f"{key_prefix}_gif_bytes"] = gif_bytes
@@ -1233,6 +1238,56 @@ def make_real_imag_addition_animation(
         showlegend=False,
     )
     return fig
+
+
+@st.cache_data(show_spinner=False)
+def build_detector_hits_animation_gif_cached(
+    screen_y: np.ndarray,
+    screen_intensity: np.ndarray,
+    hits: np.ndarray,
+    duration_ms: int = 140,
+    max_frames: int = 48,
+):
+    screen_y = np.asarray(screen_y, dtype=float)
+    screen_intensity = np.asarray(screen_intensity, dtype=float)
+    hits = np.asarray(hits, dtype=float)
+    if hits.size == 0:
+        raise ValueError('No hits available for GIF export.')
+
+    bins = np.linspace(float(screen_y.min()), float(screen_y.max()), 41)
+    centers = 0.5 * (bins[:-1] + bins[1:])
+    model_norm = screen_intensity / max(1e-12, float(np.max(screen_intensity)))
+    n = hits.size
+    frame_idx = np.unique(np.linspace(1, n, min(max_frames, n), dtype=int))
+
+    images = []
+    for k in frame_idx:
+        counts, _ = np.histogram(hits[:k], bins=bins)
+        counts_norm = counts / max(1, counts.max())
+
+        fig, ax = plt.subplots(figsize=(7.2, 4.4), dpi=120)
+        ax.plot(screen_y, model_norm, linewidth=2.8, alpha=0.22, label=tr('Final intensity', 'Konečná intenzita'))
+        bar_w = (centers[1] - centers[0]) if len(centers) > 1 else 0.05
+        ax.bar(centers, counts_norm, width=0.92 * bar_w, alpha=0.72, label=tr('Accumulated hits', 'Nasbírané dopady'))
+        ax.set_xlim(float(screen_y.min()), float(screen_y.max()))
+        ax.set_ylim(0.0, 1.05)
+        ax.set_xlabel(tr('Detector position on screen', 'Poloha detektoru na stínítku'))
+        ax.set_ylabel(tr('Normalized counts / intensity', 'Normalizované počty / intenzita'))
+        ax.set_title(f"{tr('Accumulation of individual photon hits on the screen', 'Skládání jednotlivých dopadů fotonů na stínítku')}\n{tr('Registered photons', 'Registrované fotony')}: {k}/{n}")
+        ax.grid(alpha=0.20)
+        ax.legend(loc='upper right', frameon=False)
+        fig.tight_layout()
+
+        buf = BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight')
+        plt.close(fig)
+        buf.seek(0)
+        images.append(Image.open(buf).convert('P', palette=Image.ADAPTIVE))
+
+    out = BytesIO()
+    images[0].save(out, format='GIF', save_all=True, append_images=images[1:], duration=duration_ms, loop=0)
+    out.seek(0)
+    return out.getvalue()
 
 
 # -------------------------------------------------
@@ -1789,7 +1844,17 @@ elif section == tr("Double slit: two path families", "Dvojštěrbina: dvě rodin
         hits,
         tr("Play: accumulation of individual photon hits on the screen", "Play: skládání jednotlivých dopadů fotonů na stínítku"),
     )
-    st.plotly_chart(hit_anim, use_container_width=True)
+    render_animation_with_gif(
+        hit_anim,
+        "slit_hits_anim",
+        "double_slit_hits.gif",
+        gif_kind="hits",
+        gif_payload={
+            "screen_y": data["screen_y"],
+            "screen_intensity": data["screen_intensity"],
+            "hits": hits,
+        },
+    )
 
     fig_paths = go.Figure()
     idx_u = choose_path_indices(data["upper_paths"].shape[0], st.session_state.show_paths)
