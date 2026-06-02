@@ -4,9 +4,11 @@ from typing import Callable, Dict, Iterable, Tuple
 
 import numpy as np
 import plotly.graph_objects as go
-import plotly.io as pio
 import streamlit as st
 from PIL import Image
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 from plotly.subplots import make_subplots
 from scipy.interpolate import CubicSpline
 
@@ -467,44 +469,154 @@ def choose_path_indices(total_paths: int, wanted: int) -> np.ndarray:
     return np.linspace(0, total_paths - 1, wanted, dtype=int)
 
 
-@st.cache_data(show_spinner=False)
-def build_animation_gif_cached(fig_json: str, duration_ms: int = 140, max_frames: int = 48, scale: float = 1.2) -> bytes:
-    fig = go.Figure(pio.from_json(fig_json))
-    if not fig.frames:
-        raise ValueError("This figure does not contain animation frames.")
 
-    n_frames = len(fig.frames)
-    if n_frames <= max_frames:
-        chosen = np.arange(n_frames, dtype=int)
+@st.cache_data(show_spinner=False)
+def build_addition_animation_gif_cached(
+    t: np.ndarray,
+    paths: np.ndarray,
+    x_ref: np.ndarray,
+    ordered_indices: np.ndarray,
+    ordered_amps: np.ndarray,
+    yaxis_title: str,
+    duration_ms: int = 140,
+    max_frames: int = 48,
+) -> bytes:
+    ordered_paths = paths[ordered_indices]
+    n = len(ordered_indices)
+    if n == 0:
+        raise ValueError("No animation paths available.")
+    running_path = np.cumsum(ordered_paths, axis=0) / np.arange(1, n + 1)[:, None]
+    final_path = running_path[-1]
+    walk = np.cumsum(ordered_amps) / np.arange(1, n + 1)
+    th = np.linspace(0.0, 2 * np.pi, 300)
+
+    if n <= max_frames:
+        chosen = np.arange(n, dtype=int)
     else:
-        chosen = np.linspace(0, n_frames - 1, max_frames, dtype=int)
+        chosen = np.linspace(0, n - 1, max_frames, dtype=int)
+
+    y_min = min(np.min(ordered_paths), np.min(running_path), np.min(final_path), np.min(x_ref))
+    y_max = max(np.max(ordered_paths), np.max(running_path), np.max(final_path), np.max(x_ref))
+    pad = 0.08 * max(1e-9, y_max - y_min)
+    lim = max(1.1, np.max(np.abs(np.concatenate([np.real(ordered_amps), np.imag(ordered_amps), np.real(walk), np.imag(walk)]))))
 
     images = []
-    base = go.Figure(fig)
-    for idx in chosen:
-        frame = fig.frames[int(idx)]
-        frame_fig = go.Figure(base)
-        for j, trace in enumerate(frame.data):
-            frame_fig.data[j].update(trace)
-        if frame.layout:
-            frame_fig.update_layout(frame.layout)
-        png = pio.to_image(frame_fig, format="png", engine="kaleido", scale=scale)
-        images.append(Image.open(BytesIO(png)).convert("RGBA"))
+    for k in chosen:
+        fig, axes = plt.subplots(1, 2, figsize=(10.8, 4.6), dpi=140)
+        ax0, ax1 = axes
+        ax0.plot(t, final_path, linestyle=':', linewidth=3.5, alpha=0.2)
+        ax0.plot(t, x_ref, linewidth=2.6)
+        ax0.plot(t, running_path[k], linewidth=2.8)
+        ax0.plot(t, ordered_paths[k], linewidth=1.4, alpha=0.8)
+        ax0.set_xlabel('t')
+        ax0.set_ylabel(yaxis_title)
+        ax0.set_ylim(y_min - pad, y_max + pad)
+        ax0.grid(alpha=0.18)
+        ax0.set_title('Running path sum')
+
+        ax1.scatter(np.real(ordered_amps), np.imag(ordered_amps), s=14, alpha=0.18)
+        ax1.plot(np.cos(th), np.sin(th), '--', linewidth=1.0, alpha=0.7)
+        ax1.plot(np.real(walk), np.imag(walk), ':', linewidth=2.8, alpha=0.18)
+        ax1.plot(np.real(walk[:k+1]), np.imag(walk[:k+1]), linewidth=2.4)
+        ax1.scatter([np.real(walk[k])], [np.imag(walk[k])], s=38)
+        ax1.set_xlabel('Re')
+        ax1.set_ylabel('Im')
+        ax1.set_xlim(-1.1 * lim, 1.1 * lim)
+        ax1.set_ylim(-1.1 * lim, 1.1 * lim)
+        ax1.set_aspect('equal', adjustable='box')
+        ax1.grid(alpha=0.18)
+        ax1.set_title('Cumulative phasor sum')
+
+        fig.suptitle(f'Added paths: {k + 1}/{n}   |K| ≈ {abs(walk[k]):.3f}', fontsize=12)
+        fig.tight_layout(rect=[0, 0, 1, 0.94])
+        buf = BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight')
+        plt.close(fig)
+        buf.seek(0)
+        images.append(Image.open(buf).convert('RGBA'))
 
     out = BytesIO()
-    images[0].save(
-        out,
-        format="GIF",
-        save_all=True,
-        append_images=images[1:],
-        duration=int(duration_ms),
-        loop=0,
-        disposal=2,
-    )
+    images[0].save(out, format='GIF', save_all=True, append_images=images[1:], duration=int(duration_ms), loop=0, disposal=2)
     return out.getvalue()
 
 
-def render_animation_with_gif(fig: go.Figure, key_prefix: str, filename: str) -> None:
+@st.cache_data(show_spinner=False)
+def build_real_imag_animation_gif_cached(
+    t: np.ndarray,
+    paths: np.ndarray,
+    x_ref: np.ndarray,
+    ordered_indices: np.ndarray,
+    ordered_amps: np.ndarray,
+    ordered_weights: np.ndarray,
+    yaxis_title: str,
+    duration_ms: int = 140,
+    max_frames: int = 48,
+) -> bytes:
+    ordered_paths = paths[ordered_indices]
+    n = len(ordered_indices)
+    if n == 0:
+        raise ValueError("No animation paths available.")
+    running_path = np.cumsum(ordered_paths, axis=0) / np.arange(1, n + 1)[:, None]
+    final_path = running_path[-1]
+    real_curve = np.abs(np.cumsum(ordered_amps) / np.arange(1, n + 1))
+    imag_curve = np.cumsum(ordered_weights) / np.arange(1, n + 1)
+    steps = np.arange(1, n + 1)
+
+    if n <= max_frames:
+        chosen = np.arange(n, dtype=int)
+    else:
+        chosen = np.linspace(0, n - 1, max_frames, dtype=int)
+
+    y_min = min(np.min(ordered_paths), np.min(running_path), np.min(final_path), np.min(x_ref))
+    y_max = max(np.max(ordered_paths), np.max(running_path), np.max(final_path), np.max(x_ref))
+    pad = 0.08 * max(1e-9, y_max - y_min)
+    curve_max = max(np.max(real_curve), np.max(imag_curve))
+
+    images = []
+    for k in chosen:
+        fig, axes = plt.subplots(1, 2, figsize=(10.8, 4.6), dpi=140)
+        ax0, ax1 = axes
+        ax0.plot(t, final_path, linestyle=':', linewidth=3.5, alpha=0.2)
+        ax0.plot(t, x_ref, linewidth=2.6)
+        ax0.plot(t, running_path[k], linewidth=2.8)
+        ax0.plot(t, ordered_paths[k], linewidth=1.4, alpha=0.8)
+        ax0.set_xlabel('t')
+        ax0.set_ylabel(yaxis_title)
+        ax0.set_ylim(y_min - pad, y_max + pad)
+        ax0.grid(alpha=0.18)
+        ax0.set_title('Running path sum')
+
+        ax1.plot(steps, real_curve, ':', linewidth=2.8, alpha=0.18, label='Final real-time')
+        ax1.plot(steps, imag_curve, ':', linewidth=2.8, alpha=0.18, label='Final imaginary-time')
+        ax1.plot(steps[:k+1], real_curve[:k+1], linewidth=2.4, label='Running real-time')
+        ax1.plot(steps[:k+1], imag_curve[:k+1], linewidth=2.4, label='Running imaginary-time')
+        ax1.scatter([steps[k]], [real_curve[k]], s=28)
+        ax1.scatter([steps[k]], [imag_curve[k]], s=28)
+        ax1.set_xlabel('Added paths')
+        ax1.set_ylabel('Magnitude / mean weight')
+        ax1.set_xlim(1, n)
+        ax1.set_ylim(0, 1.05 * curve_max)
+        ax1.grid(alpha=0.18)
+        ax1.set_title('Real vs imaginary time')
+        ax1.legend(loc='upper right', fontsize=8)
+
+        fig.suptitle(
+            f'Added paths: {k + 1}/{n}   real-time: {real_curve[k]:.3f}   imaginary-time: {imag_curve[k]:.3f}',
+            fontsize=12,
+        )
+        fig.tight_layout(rect=[0, 0, 1, 0.94])
+        buf = BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight')
+        plt.close(fig)
+        buf.seek(0)
+        images.append(Image.open(buf).convert('RGBA'))
+
+    out = BytesIO()
+    images[0].save(out, format='GIF', save_all=True, append_images=images[1:], duration=int(duration_ms), loop=0, disposal=2)
+    return out.getvalue()
+
+
+def render_animation_with_gif(fig: go.Figure, key_prefix: str, filename: str, gif_kind: str | None = None, gif_payload: dict | None = None) -> None:
     st.plotly_chart(fig, use_container_width=True)
     with st.expander(tr("Save this animation as GIF", "Uložit tuto animaci jako GIF"), expanded=False):
         c1, c2, c3 = st.columns([1.2, 1.2, 1.8])
@@ -538,15 +650,22 @@ def render_animation_with_gif(fig: go.Figure, key_prefix: str, filename: str) ->
         if prepare:
             try:
                 with st.spinner(tr("Generating GIF...", "Generuji GIF...")):
-                    gif_bytes = build_animation_gif_cached(fig.to_json(), duration_ms=duration_ms, max_frames=max_frames)
+                    if gif_kind == "addition" and gif_payload is not None:
+                        gif_bytes = build_addition_animation_gif_cached(
+                            gif_payload["t"], gif_payload["paths"], gif_payload["x_ref"], gif_payload["ordered_indices"],
+                            gif_payload["ordered_amps"], gif_payload["yaxis_title"], duration_ms=duration_ms, max_frames=max_frames,
+                        )
+                    elif gif_kind == "real_imag" and gif_payload is not None:
+                        gif_bytes = build_real_imag_animation_gif_cached(
+                            gif_payload["t"], gif_payload["paths"], gif_payload["x_ref"], gif_payload["ordered_indices"],
+                            gif_payload["ordered_amps"], gif_payload["ordered_weights"], gif_payload["yaxis_title"],
+                            duration_ms=duration_ms, max_frames=max_frames,
+                        )
+                    else:
+                        raise ValueError("GIF export is not configured for this animation.")
                 st.session_state[f"{key_prefix}_gif_bytes"] = gif_bytes
             except Exception as exc:
-                st.error(
-                    tr(
-                        f"GIF export failed: {exc}. Install/keep the package 'kaleido' available in the deployment.",
-                        f"Export GIF selhal: {exc}. V nasazení musí být dostupný balík 'kaleido'.",
-                    )
-                )
+                st.error(tr(f"GIF export failed: {exc}.", f"Export GIF selhal: {exc}."))
 
         gif_bytes = st.session_state.get(f"{key_prefix}_gif_bytes")
         if gif_bytes is not None:
@@ -1284,7 +1403,20 @@ if section == tr("Free particle", "Volná částice"):
         tr("Play: path-by-path accumulation for the free particle", "Play: skládání drah po jedné pro volnou částici"),
         tr("Position x(t)", "Poloha x(t)"),
     )
-    render_animation_with_gif(free_anim_fig, "free_anim", "free_particle_paths.gif")
+    render_animation_with_gif(
+        free_anim_fig,
+        "free_anim",
+        "free_particle_paths.gif",
+        gif_kind="addition",
+        gif_payload={
+            "t": data["t"],
+            "paths": data["paths"],
+            "x_ref": data["x_ref"],
+            "ordered_indices": anim_indices,
+            "ordered_amps": anim_amps,
+            "yaxis_title": tr("Position x(t)", "Poloha x(t)"),
+        },
+    )
 
     caption(
         "The classical path is not the only allowed path. It is the path around which nearby phases vary slowly enough to add more coherently.",
@@ -1400,7 +1532,20 @@ elif section == tr("Harmonic oscillator", "Harmonický oscilátor"):
         tr("Play: path-by-path accumulation for the oscillator", "Play: skládání drah po jedné pro oscilátor"),
         tr("Position x(t)", "Poloha x(t)"),
     )
-    render_animation_with_gif(ho_anim_fig, "ho_anim", "harmonic_oscillator_paths.gif")
+    render_animation_with_gif(
+        ho_anim_fig,
+        "ho_anim",
+        "harmonic_oscillator_paths.gif",
+        gif_kind="addition",
+        gif_payload={
+            "t": data["t"],
+            "paths": data["paths"],
+            "x_ref": data["x_ref"],
+            "ordered_indices": anim_indices,
+            "ordered_amps": anim_amps,
+            "yaxis_title": tr("Position x(t)", "Poloha x(t)"),
+        },
+    )
 
     caption(
         "The potential does not remove alternative paths. It changes which neighborhood of paths keeps phase coherence best.",
@@ -1601,7 +1746,20 @@ elif section == tr("Double slit: two path families", "Dvojštěrbina: dvě rodin
         tr("Play: path-by-path accumulation for the double slit", "Play: skládání drah po jedné pro dvojštěrbinu"),
         tr("Transverse coordinate", "Příčná souřadnice"),
     )
-    render_animation_with_gif(slit_anim_fig, "slit_anim", "double_slit_paths.gif")
+    render_animation_with_gif(
+        slit_anim_fig,
+        "slit_anim",
+        "double_slit_paths.gif",
+        gif_kind="addition",
+        gif_payload={
+            "t": x_prog,
+            "paths": anim_paths,
+            "x_ref": 0.5 * (data["upper_ref"] + data["lower_ref"]),
+            "ordered_indices": ordered_indices,
+            "ordered_amps": ordered_amps,
+            "yaxis_title": tr("Transverse coordinate", "Příčná souřadnice"),
+        },
+    )
 
     caption(
         "This is a visual model, not a full wave-optics slit solver. Its purpose is to make the amplitude logic visible: two broad families of paths contribute separate complex numbers that interfere on the screen.",
@@ -1768,7 +1926,21 @@ else:
         tr("Play: building the sum in real and imaginary time", "Play: budování součtu v reálném a imaginárním čase"),
         tr("Position x(t)", "Poloha x(t)"),
     )
-    render_animation_with_gif(imag_anim_fig, "imag_anim", "real_vs_imag_time_paths.gif")
+    render_animation_with_gif(
+        imag_anim_fig,
+        "imag_anim",
+        "real_vs_imag_time_paths.gif",
+        gif_kind="real_imag",
+        gif_payload={
+            "t": data["t"],
+            "paths": data["paths"],
+            "x_ref": data["x_ref"],
+            "ordered_indices": anim_indices,
+            "ordered_amps": anim_amps,
+            "ordered_weights": imag_ordered_weights,
+            "yaxis_title": tr("Position x(t)", "Poloha x(t)"),
+        },
+    )
 
     caption(
         "In real time, every sampled path has unit modulus and differs only by phase, which makes cancellation severe. In imaginary time, large-action paths are exponentially suppressed.",

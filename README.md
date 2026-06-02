@@ -34,4 +34,4 @@ This is a didactic visualization tool, not a rigorous continuum path-integral so
 
 ## GIF export
 
-Animated panels can be exported directly from the app as GIF files. The export uses Plotly frame rendering via `kaleido` and assembles the result into a GIF with `Pillow`.
+Animated panels can be exported directly from the app as GIF files. The export renders animation frames directly with `matplotlib` and assembles them into a GIF with `Pillow`, so it does not require Chrome or Kaleido.
