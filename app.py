@@ -252,7 +252,7 @@ with st.expander(tr("Theory, intuition, and references", "Teorie, intuice a refe
         t_math(
             r"""
 ### 1. Core idea
-For fixed endpoints \\(x_a,0\\) and \\(x_b,T\\), the propagator is written formally as
+For fixed endpoints $x_a,0$ and $x_b,T$, the propagator is written formally as
 
 $$
 K(x_b,T;x_a,0)=\int \mathcal{D}[x(t)]\,e^{iS[x]/\hbar},
@@ -275,14 +275,14 @@ $$
 \delta S = 0.
 $$
 
-Near that path, the phase \\(S/\hbar\\) changes slowly, so nearby contributions tend to add coherently. Far from it, phases oscillate rapidly and tend to cancel. This is the **stationary-phase idea**.
+Near that path, the phase $S/\hbar$ changes slowly, so nearby contributions tend to add coherently. Far from it, phases oscillate rapidly and tend to cancel. This is the **stationary-phase idea**.
 
 ### 3. What the app computes numerically
 This app is intentionally didactic. It does **not** evaluate the continuum path integral exactly. Instead, it:
 - discretizes the time interval,
 - generates many smooth trial paths with vectorized `numpy` arrays,
 - evaluates discrete actions for whole ensembles at once,
-- converts them into phase factors \\(e^{iS/\hbar}\\),
+- converts them into phase factors $e^{iS/\hbar}$,
 - shows how cumulative interference builds up.
 
 ### 4. Why several panels are useful
@@ -293,7 +293,7 @@ This app is intentionally didactic. It does **not** evaluate the continuum path 
 
 ### 5. What to look for in the plots
 - **Path cloud:** many possible paths between the same endpoints.
-- **Density plot:** where sampled paths accumulate in the \\((t,x)\\) plane.
+- **Density plot:** where sampled paths accumulate in the $(t,x)$ plane.
 - **Action histogram:** how far trial paths are from the reference action.
 - **Phasor plot:** each path contributes one complex number on the unit circle.
 - **Play animation:** the cumulative sum updates as paths are added one by one.
@@ -308,7 +308,7 @@ This app is intentionally didactic. It does **not** evaluate the continuum path 
             """,
             r"""
 ### 1. Základní myšlenka
-Pro pevné koncové body \\(x_a,0\\) a \\(x_b,T\\) lze propagátor formálně zapsat jako
+Pro pevné koncové body $x_a,0$ a $x_b,T$ lze propagátor formálně zapsat jako
 
 $$
 K(x_b,T;x_a,0)=\int \mathcal{D}[x(t)]\,e^{iS[x]/\hbar},
@@ -331,14 +331,14 @@ $$
 \delta S = 0.
 $$
 
-V jejím okolí se fáze \\(S/\hbar\\) mění pomalu, takže blízké příspěvky se obvykle sčítají koherentně. Daleko od ní fáze rychle oscilují a příspěvky se mají tendenci rušit. To je idea **stacionární fáze**.
+V jejím okolí se fáze $S/\hbar$ mění pomalu, takže blízké příspěvky se obvykle sčítají koherentně. Daleko od ní fáze rychle oscilují a příspěvky se mají tendenci rušit. To je idea **stacionární fáze**.
 
 ### 3. Co aplikace numericky počítá
 Tato aplikace je záměrně didaktická. **Neřeší** přesně kontinuální drahový integrál. Místo toho:
 - diskretizuje časový interval,
 - generuje mnoho hladkých zkušebních drah pomocí vektorových polí `numpy`,
 - vyhodnocuje diskrétní akce pro celé ansámbly najednou,
-- převádí je na fázové faktory \\(e^{iS/\hbar}\\),
+- převádí je na fázové faktory $e^{iS/\hbar}$,
 - ukazuje, jak se buduje kumulativní interference.
 
 ### 4. Proč jsou užitečné různé panely
@@ -349,7 +349,7 @@ Tato aplikace je záměrně didaktická. **Neřeší** přesně kontinuální dr
 
 ### 5. Na co se dívat v grafech
 - **Mračno drah:** mnoho možných drah mezi stejnými konci.
-- **Hustotní mapa:** kde se vzorkované dráhy koncentrují v rovině \\((t,x)\\).
+- **Hustotní mapa:** kde se vzorkované dráhy koncentrují v rovině $(t,x)$.
 - **Histogram akcí:** jak daleko jsou zkušební dráhy od referenční akce.
 - **Fázorový graf:** každá dráha přispívá jedním komplexním číslem na jednotkové kružnici.
 - **Animace Play:** kumulativní součet se aktualizuje při přidávání drah po jedné.
@@ -1099,7 +1099,7 @@ if section == tr("Free particle", "Volná částice"):
 - Increase **Path spread** to generate wilder trajectories around the classical straight line.
 - Decrease **Effective ħ** to make stationary phase sharper.
 - **Sampled paths** shows individual candidate paths and the straight classical reference.
-- **Path density** shows where the sampled ensemble spends most of its time in the \\(t,x\\) plane.
+- **Path density** shows where the sampled ensemble spends most of its time in the $t,x$ plane.
 - **Action histogram** shows how far the trial actions are from the reference action.
 - **Phasor interference** puts each path contribution on the complex plane.
 - **Play: path-by-path accumulation** adds paths one by one so you can watch the cumulative complex sum build up.
@@ -1109,7 +1109,7 @@ if section == tr("Free particle", "Volná částice"):
 - Zvýšením **Rozptylu drah** vytvoříš divočejší trajektorie kolem klasické přímky.
 - Snížením **Efektivního ħ** se zvýrazní stacionární fáze.
 - **Vzorkované dráhy** ukazují jednotlivé kandidátní dráhy a klasickou přímku.
-- **Hustota drah** ukazuje, kde se ansámbl drah nejvíce koncentruje v rovině \\(t,x\\).
+- **Hustota drah** ukazuje, kde se ansámbl drah nejvíce koncentruje v rovině $t,x$.
 - **Histogram akcí** ukazuje, jak daleko jsou zkušební akce od referenční akce.
 - **Interference fázorů** převádí každý příspěvek dráhy do komplexní roviny.
 - **Play: skládání drah po jedné** přidává dráhy postupně, takže lze sledovat vznik kumulativního komplexního součtu.
