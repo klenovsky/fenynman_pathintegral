@@ -608,6 +608,8 @@ def make_addition_animation(
     n = len(ordered_indices)
     ordered_paths = paths[ordered_indices]
     walk = np.cumsum(ordered_amps) / np.arange(1, n + 1)
+    running_path = np.cumsum(ordered_paths, axis=0) / np.arange(1, n + 1)[:, None]
+    final_path = running_path[-1]
     th = np.linspace(0, 2 * np.pi, 300)
 
     fig = make_subplots(
@@ -615,11 +617,24 @@ def make_addition_animation(
         cols=2,
         column_widths=[0.56, 0.44],
         subplot_titles=(
-            tr("Currently added path", "Právě přidávaná dráha"),
+            tr("Running path sum (normalized)", "Průběžný součet drah (normalizovaný)"),
             tr("Cumulative phasor sum", "Kumulativní součet fázorů"),
         ),
     )
 
+    # Left panel: the final averaged path is shown as a faint shadow from the start.
+    fig.add_trace(
+        go.Scatter(
+            x=t,
+            y=final_path,
+            mode="lines",
+            line=dict(width=6, dash="dot"),
+            opacity=0.18,
+            name=tr("Final normalized sum (shadow)", "Konečný normalizovaný součet (stín)"),
+        ),
+        row=1,
+        col=1,
+    )
     fig.add_trace(
         go.Scatter(
             x=t,
@@ -634,22 +649,35 @@ def make_addition_animation(
     fig.add_trace(
         go.Scatter(
             x=t,
+            y=running_path[0],
+            mode="lines",
+            line=dict(width=4),
+            name=tr("Running normalized sum", "Běžící normalizovaný součet"),
+        ),
+        row=1,
+        col=1,
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=t,
             y=ordered_paths[0],
             mode="lines",
-            line=dict(width=3),
+            line=dict(width=2),
+            opacity=0.75,
             name=tr("Current path", "Aktuální dráha"),
         ),
         row=1,
         col=1,
     )
 
+    # Right panel: phasor addition with faint final walk shown from the start.
     fig.add_trace(
         go.Scatter(
             x=np.real(ordered_amps),
             y=np.imag(ordered_amps),
             mode="markers",
             marker=dict(size=6),
-            opacity=0.25,
+            opacity=0.18,
             name=tr("All sampled path phases", "Fáze všech vybraných drah"),
         ),
         row=1,
@@ -668,12 +696,24 @@ def make_addition_animation(
     )
     fig.add_trace(
         go.Scatter(
+            x=np.real(walk),
+            y=np.imag(walk),
+            mode="lines",
+            line=dict(width=5, dash="dot"),
+            opacity=0.16,
+            name=tr("Final cumulative walk (shadow)", "Konečná kumulativní trajektorie (stín)"),
+        ),
+        row=1,
+        col=2,
+    )
+    fig.add_trace(
+        go.Scatter(
             x=np.real(walk[:1]),
             y=np.imag(walk[:1]),
             mode="lines+markers",
             line=dict(width=3),
             marker=dict(size=7),
-            name=tr("Running average", "Běžící průměr"),
+            name=tr("Running cumulative walk", "Běžící kumulativní trajektorie"),
         ),
         row=1,
         col=2,
@@ -694,10 +734,13 @@ def make_addition_animation(
     for k in range(n):
         frame = go.Frame(
             data=[
+                go.Scatter(x=t, y=final_path),
                 go.Scatter(x=t, y=x_ref),
+                go.Scatter(x=t, y=running_path[k]),
                 go.Scatter(x=t, y=ordered_paths[k]),
                 go.Scatter(x=np.real(ordered_amps), y=np.imag(ordered_amps)),
                 go.Scatter(x=np.cos(th), y=np.sin(th)),
+                go.Scatter(x=np.real(walk), y=np.imag(walk)),
                 go.Scatter(x=np.real(walk[: k + 1]), y=np.imag(walk[: k + 1])),
                 go.Scatter(x=[np.real(walk[k])], y=[np.imag(walk[k])]),
             ],
@@ -718,21 +761,159 @@ def make_addition_animation(
     fig.update_yaxes(title_text="Im", scaleanchor="x2", scaleratio=1, row=1, col=2)
     fig.update_layout(
         title=(
-            f"{title}<br><sup>{tr('Press Play to watch how path contributions accumulate', 'Stiskni Play a sleduj, jak se příspěvky drah skládají')}</sup>"
+            f"{title}<br><sup>{tr('Press Play to watch the running path sum and the phasor sum build up', 'Stiskni Play a sleduj vznik běžícího součtu drah i součtu fázorů')}</sup>"
         ),
-        height=470,
-        margin=dict(l=20, r=20, t=78, b=20),
+        height=500,
+        margin=dict(l=20, r=20, t=88, b=20),
         updatemenus=[
             {
                 "type": "buttons",
                 "direction": "left",
                 "x": 0.02,
-                "y": 1.14,
+                "y": 1.16,
                 "buttons": [
                     {
                         "label": tr("Play", "Play"),
                         "method": "animate",
-                        "args": [None, {"frame": {"duration": 140, "redraw": False}, "fromcurrent": True, "transition": {"duration": 0}}],
+                        "args": [None, {"frame": {"duration": 150, "redraw": False}, "fromcurrent": True, "transition": {"duration": 0}}],
+                    },
+                    {
+                        "label": tr("Pause", "Pauza"),
+                        "method": "animate",
+                        "args": [[None], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}],
+                    },
+                ],
+            }
+        ],
+        sliders=[
+            {
+                "active": 0,
+                "x": 0.1,
+                "len": 0.85,
+                "y": -0.08,
+                "currentvalue": {"prefix": tr("Step ", "Krok ")},
+                "steps": [
+                    {
+                        "label": str(k + 1),
+                        "method": "animate",
+                        "args": [[str(k)], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}],
+                    }
+                    for k in range(n)
+                ],
+            }
+        ],
+        showlegend=False,
+    )
+    return fig
+
+
+def make_real_imag_addition_animation(
+    t: np.ndarray,
+    paths: np.ndarray,
+    x_ref: np.ndarray,
+    ordered_indices: np.ndarray,
+    ordered_amps: np.ndarray,
+    ordered_weights: np.ndarray,
+    title: str,
+    yaxis_title: str,
+) -> go.Figure:
+    n = len(ordered_indices)
+    ordered_paths = paths[ordered_indices]
+    running_path = np.cumsum(ordered_paths, axis=0) / np.arange(1, n + 1)[:, None]
+    final_path = running_path[-1]
+    real_curve = np.abs(np.cumsum(ordered_amps) / np.arange(1, n + 1))
+    imag_curve = np.cumsum(ordered_weights) / np.arange(1, n + 1)
+    steps = np.arange(1, n + 1)
+
+    fig = make_subplots(
+        rows=1,
+        cols=2,
+        column_widths=[0.56, 0.44],
+        subplot_titles=(
+            tr("Running path sum (normalized)", "Průběžný součet drah (normalizovaný)"),
+            tr("Real-time cancellation vs imaginary-time damping", "Rušení v reálném čase vs tlumení v imaginárním čase"),
+        ),
+    )
+
+    fig.add_trace(
+        go.Scatter(x=t, y=final_path, mode="lines", line=dict(width=6, dash="dot"), opacity=0.18, name=tr("Final normalized sum (shadow)", "Konečný normalizovaný součet (stín)")),
+        row=1, col=1,
+    )
+    fig.add_trace(
+        go.Scatter(x=t, y=x_ref, mode="lines", line=dict(width=4), name=tr("Reference path", "Referenční dráha")),
+        row=1, col=1,
+    )
+    fig.add_trace(
+        go.Scatter(x=t, y=running_path[0], mode="lines", line=dict(width=4), name=tr("Running normalized sum", "Běžící normalizovaný součet")),
+        row=1, col=1,
+    )
+    fig.add_trace(
+        go.Scatter(x=t, y=ordered_paths[0], mode="lines", line=dict(width=2), opacity=0.75, name=tr("Current path", "Aktuální dráha")),
+        row=1, col=1,
+    )
+
+    fig.add_trace(
+        go.Scatter(x=steps, y=real_curve, mode="lines", line=dict(width=5, dash="dot"), opacity=0.18, name=tr("Final real-time curve (shadow)", "Konečná křivka reálného času (stín)")),
+        row=1, col=2,
+    )
+    fig.add_trace(
+        go.Scatter(x=steps, y=imag_curve, mode="lines", line=dict(width=5, dash="dot"), opacity=0.18, name=tr("Final imaginary-time curve (shadow)", "Konečná křivka imaginárního času (stín)")),
+        row=1, col=2,
+    )
+    fig.add_trace(
+        go.Scatter(x=steps[:1], y=real_curve[:1], mode="lines+markers", line=dict(width=3), marker=dict(size=7), name=tr("Running real-time magnitude", "Běžící velikost v reálném čase")),
+        row=1, col=2,
+    )
+    fig.add_trace(
+        go.Scatter(x=steps[:1], y=imag_curve[:1], mode="lines+markers", line=dict(width=3), marker=dict(size=7), name=tr("Running imaginary-time mean weight", "Běžící střední váha v imaginárním čase")),
+        row=1, col=2,
+    )
+
+    frames = []
+    for k in range(n):
+        frames.append(
+            go.Frame(
+                data=[
+                    go.Scatter(x=t, y=final_path),
+                    go.Scatter(x=t, y=x_ref),
+                    go.Scatter(x=t, y=running_path[k]),
+                    go.Scatter(x=t, y=ordered_paths[k]),
+                    go.Scatter(x=steps, y=real_curve),
+                    go.Scatter(x=steps, y=imag_curve),
+                    go.Scatter(x=steps[: k + 1], y=real_curve[: k + 1]),
+                    go.Scatter(x=steps[: k + 1], y=imag_curve[: k + 1]),
+                ],
+                name=str(k),
+                layout=go.Layout(
+                    title=(
+                        f"{title}<br><sup>{tr('Added paths', 'Přidané dráhy')}: {k + 1}/{n}, "
+                        f"{tr('real-time magnitude', 'velikost v reálném čase')}: {real_curve[k]:.3f}, "
+                        f"{tr('imaginary-time mean weight', 'střední váha v imaginárním čase')}: {imag_curve[k]:.3f}</sup>"
+                    )
+                ),
+            )
+        )
+
+    fig.frames = frames
+    fig.update_xaxes(title_text=tr("Time t", "Čas t"), row=1, col=1)
+    fig.update_yaxes(title_text=yaxis_title, row=1, col=1)
+    fig.update_xaxes(title_text=tr("Added paths", "Přidané dráhy"), row=1, col=2)
+    fig.update_yaxes(title_text=tr("Magnitude / mean weight", "Velikost / střední váha"), row=1, col=2)
+    fig.update_layout(
+        title=f"{title}<br><sup>{tr('Press Play to compare running real-time cancellation and imaginary-time damping', 'Stiskni Play a porovnej průběžné rušení v reálném čase s tlumením v imaginárním čase')}</sup>",
+        height=500,
+        margin=dict(l=20, r=20, t=88, b=20),
+        updatemenus=[
+            {
+                "type": "buttons",
+                "direction": "left",
+                "x": 0.02,
+                "y": 1.16,
+                "buttons": [
+                    {
+                        "label": tr("Play", "Play"),
+                        "method": "animate",
+                        "args": [None, {"frame": {"duration": 150, "redraw": False}, "fromcurrent": True, "transition": {"duration": 0}}],
                     },
                     {
                         "label": tr("Pause", "Pauza"),
@@ -1226,23 +1407,32 @@ elif section == tr("Double slit: two path families", "Dvojštěrbina: dvě rodin
     met2.metric(tr("|lower-family mean amplitude|", "|střední amplituda dolní rodiny|"), f"{abs(bottom_mean):.3f}")
     met3.metric(tr("|combined amplitude|", "|kombinovaná amplituda|"), f"{abs(total_mean):.3f}")
 
-    # Schematic figure.
+    # Schematic figure with explicit slit openings.
     fig_scheme = go.Figure()
     x_source, x_barrier, x_screen = 0.0, 0.50, 1.0
+    barrier_w = 0.035
     gap_half = 0.10
     y_lim = max(1.1, 0.9 * st.session_state.slit_scan_span)
-    # barrier segments
-    fig_scheme.add_shape(type="line", x0=x_barrier, x1=x_barrier, y0=-y_lim, y1=data["lower_slit_y"] - gap_half, line=dict(width=5))
-    fig_scheme.add_shape(type="line", x0=x_barrier, x1=x_barrier, y0=data["lower_slit_y"] + gap_half, y1=data["upper_slit_y"] - gap_half, line=dict(width=5))
-    fig_scheme.add_shape(type="line", x0=x_barrier, x1=x_barrier, y0=data["upper_slit_y"] + gap_half, y1=y_lim, line=dict(width=5))
+
+    # Barrier body as three filled rectangles so the two slit openings are unmistakable.
+    barrier_style = dict(line=dict(width=1), fillcolor="rgba(90, 100, 120, 0.45)")
+    fig_scheme.add_shape(type="rect", x0=x_barrier - barrier_w / 2, x1=x_barrier + barrier_w / 2, y0=-y_lim, y1=data["lower_slit_y"] - gap_half, **barrier_style)
+    fig_scheme.add_shape(type="rect", x0=x_barrier - barrier_w / 2, x1=x_barrier + barrier_w / 2, y0=data["lower_slit_y"] + gap_half, y1=data["upper_slit_y"] - gap_half, **barrier_style)
+    fig_scheme.add_shape(type="rect", x0=x_barrier - barrier_w / 2, x1=x_barrier + barrier_w / 2, y0=data["upper_slit_y"] + gap_half, y1=y_lim, **barrier_style)
+
+    # Slit openings highlighted explicitly.
+    slit_style = dict(line=dict(width=2), fillcolor="rgba(255,255,255,0.95)")
+    fig_scheme.add_shape(type="rect", x0=x_barrier - barrier_w / 2, x1=x_barrier + barrier_w / 2, y0=data["upper_slit_y"] - gap_half, y1=data["upper_slit_y"] + gap_half, **slit_style)
+    fig_scheme.add_shape(type="rect", x0=x_barrier - barrier_w / 2, x1=x_barrier + barrier_w / 2, y0=data["lower_slit_y"] - gap_half, y1=data["lower_slit_y"] + gap_half, **slit_style)
+
     fig_scheme.add_shape(type="line", x0=x_screen, x1=x_screen, y0=-y_lim, y1=y_lim, line=dict(width=4, dash="dot"))
     fig_scheme.add_trace(go.Scatter(x=[x_source], y=[0.0], mode="markers+text", text=[tr("source", "zdroj")], textposition="bottom right", marker=dict(size=11), name=tr("Source", "Zdroj")))
-    fig_scheme.add_trace(go.Scatter(x=[x_barrier, x_barrier], y=[data["upper_slit_y"], data["lower_slit_y"]], mode="markers+text", text=[tr("upper slit", "horní štěrbina"), tr("lower slit", "dolní štěrbina")], textposition="middle right", marker=dict(size=9), name=tr("Slits", "Štěrbiny")))
+    fig_scheme.add_trace(go.Scatter(x=[x_barrier, x_barrier], y=[data["upper_slit_y"], data["lower_slit_y"]], mode="markers+text", text=[tr("upper slit", "horní štěrbina"), tr("lower slit", "dolní štěrbina")], textposition="middle right", marker=dict(size=10), name=tr("Slits", "Štěrbiny")))
     fig_scheme.add_trace(go.Scatter(x=[x_screen], y=[data["detector_y"]], mode="markers+text", text=[tr("detector", "detektor")], textposition="middle left", marker=dict(size=11), name=tr("Detector", "Detektor")))
     fig_scheme.add_trace(go.Scatter(x=[x_source, x_barrier, x_screen], y=[0.0, data["upper_slit_y"], data["detector_y"]], mode="lines", line=dict(width=3, dash="dash"), name=tr("Upper reference family", "Horní referenční rodina")))
     fig_scheme.add_trace(go.Scatter(x=[x_source, x_barrier, x_screen], y=[0.0, data["lower_slit_y"], data["detector_y"]], mode="lines", line=dict(width=3, dash="dash"), name=tr("Lower reference family", "Dolní referenční rodina")))
     fig_scheme.update_layout(
-        title=tr("Geometry with two slits and a detector point", "Geometrie se dvěma štěrbinami a bodem detektoru"),
+        title=tr("Geometry with a barrier and two explicit slit openings", "Geometrie s bariérou a dvěma explicitními štěrbinami"),
         xaxis_title=tr("Propagation direction", "Směr šíření"),
         yaxis_title=tr("Transverse coordinate", "Příčná souřadnice"),
         height=410,
@@ -1277,6 +1467,10 @@ elif section == tr("Double slit: two path families", "Dvojštěrbina: dvě rodin
         fig_paths.add_trace(go.Scatter(x=x_prog, y=row, mode="lines", opacity=0.14, showlegend=False))
     fig_paths.add_trace(go.Scatter(x=x_prog, y=data["upper_ref"], mode="lines", line=dict(width=4), name=tr("Upper reference", "Horní reference")))
     fig_paths.add_trace(go.Scatter(x=x_prog, y=data["lower_ref"], mode="lines", line=dict(width=4), name=tr("Lower reference", "Dolní reference")))
+    fig_paths.add_shape(type="line", x0=0.5, x1=0.5, y0=-y_lim, y1=data["lower_slit_y"] - gap_half, line=dict(width=3))
+    fig_paths.add_shape(type="line", x0=0.5, x1=0.5, y0=data["lower_slit_y"] + gap_half, y1=data["upper_slit_y"] - gap_half, line=dict(width=3))
+    fig_paths.add_shape(type="line", x0=0.5, x1=0.5, y0=data["upper_slit_y"] + gap_half, y1=y_lim, line=dict(width=3))
+    fig_paths.add_trace(go.Scatter(x=[0.5, 0.5], y=[data["upper_slit_y"], data["lower_slit_y"]], mode="markers", marker=dict(size=9), showlegend=False))
     fig_paths.update_layout(
         title=tr("Sampled path bundles passing through the slit regions", "Vzorkované svazky drah procházející oblastmi štěrbin"),
         xaxis_title=tr("Propagation parameter", "Parametr šíření"),
@@ -1311,7 +1505,7 @@ elif section == tr("Double slit: two path families", "Dvojštěrbina: dvě rodin
         make_addition_animation(
             x_prog,
             anim_paths,
-            data["upper_ref"],
+            0.5 * (data["upper_ref"] + data["lower_ref"]),
             ordered_indices,
             ordered_amps,
             tr("Play: path-by-path accumulation for the double slit", "Play: skládání drah po jedné pro dvojštěrbinu"),
@@ -1471,6 +1665,23 @@ else:
     col3, col4 = st.columns(2)
     col3.plotly_chart(fig_t, use_container_width=True)
     col4.plotly_chart(fig_p, use_container_width=True)
+
+    imag_ordered_weights = weights[phase_info["sort_idx"]][: min(st.session_state.anim_paths, len(phase_info["sort_idx"]))]
+    anim_indices = phase_info["sort_idx"][: min(st.session_state.anim_paths, len(phase_info["sort_idx"]))]
+    anim_amps = phase_info["ordered_amps"][: len(anim_indices)]
+    st.plotly_chart(
+        make_real_imag_addition_animation(
+            data["t"],
+            data["paths"],
+            data["x_ref"],
+            anim_indices,
+            anim_amps,
+            imag_ordered_weights,
+            tr("Play: building the sum in real and imaginary time", "Play: budování součtu v reálném a imaginárním čase"),
+            tr("Position x(t)", "Poloha x(t)"),
+        ),
+        use_container_width=True,
+    )
 
     caption(
         "In real time, every sampled path has unit modulus and differs only by phase, which makes cancellation severe. In imaginary time, large-action paths are exponentially suppressed.",
