@@ -222,8 +222,8 @@ st.markdown(
     <div class="hero">
         <div class="hero-title">{tr("Feynman Path Integral Explorer", "Průzkumník Feynmanových drahových integrálů")}</div>
         <div class="hero-subtitle">{tr(
-            "A teaching app for students: not one path, but many possible paths; not one answer, but an interference sum of amplitudes.",
-            "Výuková aplikace pro studenty: ne jedna dráha, ale mnoho možných drah; ne jedna odpověď, ale interferenční součet amplitud."
+            "A visual app: not one path, but many possible paths; not one answer, but an interference sum of amplitudes.",
+            "Vizuální aplikace: ne jedna dráha, ale mnoho možných drah; ne jedna odpověď, ale interferenční součet amplitud."
         )}</div>
     </div>
     ''',
@@ -266,7 +266,7 @@ S[x]=\int_0^T L(x,\dot x,t)\,dt,
 L=\frac{1}{2}m\dot x^2 - V(x).
 $$
 
-The message for students is simple: quantum motion is not described by a single path. It is described by **interference of amplitudes coming from many paths**.
+Quantum motion is not described by a single path. It is described by **interference of amplitudes coming from many paths**.
 
 ### 2. Why the classical path still appears
 The classical path is not singled out because other paths are forbidden. It is special because it makes the action stationary,
@@ -322,7 +322,7 @@ S[x]=\int_0^T L(x,\dot x,t)\,dt,
 L=\frac{1}{2}m\dot x^2 - V(x).
 $$
 
-Hlavní sdělení pro studenty je jednoduché: kvantový pohyb není popsán jedinou drahou. Je popsán **interferencí amplitud pocházejících z mnoha drah**.
+Kvantový pohyb není popsán jedinou drahou. Je popsán **interferencí amplitud pocházejících z mnoha drah**.
 
 ### 2. Proč se přesto objevuje klasická dráha
 Klasická dráha není výjimečná tím, že by ostatní dráhy byly zakázané. Je výjimečná tím, že činí akci stacionární,
@@ -1515,8 +1515,8 @@ elif section == tr("Double slit: two path families", "Dvojštěrbina: dvě rodin
     )
 
     caption(
-        "This is a teaching model, not a full wave-optics slit solver. Its purpose is to make the amplitude logic visible: two broad families of paths contribute separate complex numbers that interfere on the screen.",
-        "Toto je výukový model, nikoli plný řešič vlnové optiky dvojštěrbiny. Jeho cílem je zviditelnit logiku amplitud: dvě široké rodiny drah dávají oddělená komplexní čísla, která na stínítku interferují.",
+        "This is a visual model, not a full wave-optics slit solver. Its purpose is to make the amplitude logic visible: two broad families of paths contribute separate complex numbers that interfere on the screen.",
+        "Toto je vizuální model, nikoli plný řešič vlnové optiky dvojštěrbiny. Jeho cílem je zviditelnit logiku amplitud: dvě široké rodiny drah dávají oddělená komplexní čísla, která na stínítku interferují.",
     )
 
 
@@ -1696,8 +1696,8 @@ st.markdown(
     f'''
     <div class="caption-box">
     <b>{tr("Implementation note", "Poznámka k implementaci")}</b>: {tr(
-        "The expensive parts are vectorized: path ensembles are stored as 2D numpy arrays, cubic splines are evaluated for whole batches at once, and actions are computed without Python loops over paths. This keeps the app suitable for GitHub and Streamlit deployment while staying transparent enough for teaching.",
-        "Výpočetně náročné části jsou vektorizované: ansámbly drah jsou uložené jako 2D pole numpy, kubické splajny se vyhodnocují pro celé dávky najednou a akce se počítají bez pythonovských smyček přes jednotlivé dráhy. Aplikace tak zůstává vhodná pro GitHub a Streamlit a zároveň dost průhledná pro výuku."
+        "The expensive parts are vectorized: path ensembles are stored as 2D numpy arrays, cubic splines are evaluated for whole batches at once, and actions are computed without Python loops over paths. This keeps the app suitable for GitHub and Streamlit deployment while remaining transparent in how the calculation works.",
+        "Výpočetně náročné části jsou vektorizované: ansámbly drah jsou uložené jako 2D pole numpy, kubické splajny se vyhodnocují pro celé dávky najednou a akce se počítají bez pythonovských smyček přes jednotlivé dráhy. Aplikace tak zůstává vhodná pro GitHub a Streamlit a zároveň zůstává průhledná v tom, jak výpočet funguje."
     )}
     </div>
     ''',
